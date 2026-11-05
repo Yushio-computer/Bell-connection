@@ -701,7 +701,18 @@ const hwStatus = document.getElementById('hwStatus');
 const hwLog = document.getElementById('hwLog');
 
 let hwDevice = null;
+let hwBackend = null; // 'usb' (WebUSB) または 'serial' (Web Serial)
 let hwPolling = false;
+
+/* Macには、CH340の標準ドライバが入っていないため、WebUSBで直接デバイスを叩く必要がある。
+   一方Windowsでは、CH340の標準ドライバがデバイスを占有してしまい、WebUSBでは
+   device.open()が「Access denied」で失敗する。Windowsでは、代わりにOSのドライバ経由で
+   繋がるWeb Serial APIを使うと、この占有を避けられる。そのため、OSを判定して、
+   使う方式を切り替える。 */
+function detectPreferredHwBackend() {
+  const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
+  return /win/i.test(platform) ? 'serial' : 'usb';
+}
 
 function logHw(msg) {
   const t = new Date().toLocaleTimeString();
@@ -728,38 +739,83 @@ function hwUiDisconnected(text) {
   disconnectHwBtn.disabled = true;
 }
 
+async function connectViaUsb() {
+  const device = await navigator.usb.requestDevice({
+    filters: [{ vendorId: 0x1a86, productId: 0x7523 }]
+  });
+  await device.open();
+  if (device.configuration === null) {
+    await device.selectConfiguration(1);
+  }
+  await device.claimInterface(0);
+
+  const DTR = 0x20, RTS = 0x40;
+  const control = DTR | RTS;
+  const wValue = (~control) & 0xFF;
+  await device.controlTransferOut({
+    requestType: 'vendor', recipient: 'device', request: 0xA4, value: wValue, index: 0
+  });
+
+  hwBackend = 'usb';
+  hwDevice = device;
+  logHw('WebUSBで接続しました。DTR/RTSをONにしました。');
+}
+
+async function connectViaSerial() {
+  const port = await navigator.serial.requestPort({
+    filters: [{ usbVendorId: 0x1a86, usbProductId: 0x7523 }]
+  });
+  await port.open({ baudRate: 9600 });
+  await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+
+  hwBackend = 'serial';
+  hwDevice = port;
+  logHw('Web Serialで接続しました。DTR/RTSをONにしました。');
+}
+
 async function connectHardware() {
-  if (!('usb' in navigator)) {
-    logHw('このブラウザはWebUSBに対応していません。Chrome/Edgeを使ってください。');
+  const hasUsb = 'usb' in navigator;
+  const hasSerial = 'serial' in navigator;
+  if (!hasUsb && !hasSerial) {
+    logHw('このブラウザはWebUSB/Web Serialに対応していません。Chrome/Edgeを使ってください。');
     return;
   }
+
+  const preferred = detectPreferredHwBackend();
+  const primary = (preferred === 'usb' && hasUsb) ? 'usb'
+                : (preferred === 'serial' && hasSerial) ? 'serial'
+                : (hasUsb ? 'usb' : 'serial');
+
   try {
-    const device = await navigator.usb.requestDevice({
-      filters: [{ vendorId: 0x1a86, productId: 0x7523 }]
-    });
-    await device.open();
-    if (device.configuration === null) {
-      await device.selectConfiguration(1);
-    }
-    await device.claimInterface(0);
-
-    const DTR = 0x20, RTS = 0x40;
-    const control = DTR | RTS;
-    const wValue = (~control) & 0xFF;
-    await device.controlTransferOut({
-      requestType: 'vendor', recipient: 'device', request: 0xA4, value: wValue, index: 0
-    });
-
-    logHw('接続しました。DTR/RTSをONにしました。');
-    hwDevice = device;
-    hwPolling = true;
-    hwUiConnected();
-
-    pollHardware();
+    if (primary === 'usb') { await connectViaUsb(); } else { await connectViaSerial(); }
   } catch (e) {
-    logHw('接続失敗: ' + e.message);
-    setHwStatus('接続失敗', 'err');
+    if (e.name === 'NotFoundError') {
+      // デバイス選択画面で、ユーザーが何も選ばなかった場合は、そのまま終了する(もう一方は試さない)
+      logHw('デバイスが選択されませんでした。');
+      setHwStatus('未接続');
+      return;
+    }
+    logHw(`${primary === 'usb' ? 'WebUSB' : 'Web Serial'}での接続に失敗しました: ` + e.message);
+
+    const fallback = primary === 'usb' ? 'serial' : 'usb';
+    const fallbackAvailable = fallback === 'usb' ? hasUsb : hasSerial;
+    if (!fallbackAvailable) {
+      setHwStatus('接続失敗', 'err');
+      return;
+    }
+    logHw(`${fallback === 'usb' ? 'WebUSB' : 'Web Serial'}方式で、もう一度試します。`);
+    try {
+      if (fallback === 'usb') { await connectViaUsb(); } else { await connectViaSerial(); }
+    } catch (e2) {
+      logHw('接続失敗: ' + e2.message);
+      setHwStatus('接続失敗', 'err');
+      return;
+    }
   }
+
+  hwPolling = true;
+  hwUiConnected();
+  pollHardware();
 }
 
 async function disconnectHardware() {
@@ -772,6 +828,7 @@ async function disconnectHardware() {
     }
   }
   hwDevice = null;
+  hwBackend = null;
   logHw('切断しました。');
   hwUiDisconnected('未接続');
 }
@@ -779,11 +836,17 @@ async function disconnectHardware() {
 async function pollHardware() {
   while (hwPolling) {
     try {
-      const result = await hwDevice.controlTransferIn({
-        requestType: 'vendor', recipient: 'device', request: 0x95, value: 0x0706, index: 0
-      }, 2);
-      const byte0 = result.data.getUint8(0);
-      const isOn = (byte0 & 0x02) === 0;
+      let isOn;
+      if (hwBackend === 'usb') {
+        const result = await hwDevice.controlTransferIn({
+          requestType: 'vendor', recipient: 'device', request: 0x95, value: 0x0706, index: 0
+        }, 2);
+        const byte0 = result.data.getUint8(0);
+        isOn = (byte0 & 0x02) === 0;
+      } else {
+        const signals = await hwDevice.getSignals();
+        isOn = signals.dataSetReady;
+      }
       setState(isOn);
       await new Promise(r => setTimeout(r, 100));
     } catch (e) {
