@@ -355,7 +355,7 @@
           <div class="sound-title">メロディー(ON中ループ再生)</div>
           <div class="sound-filename" id="melodyName">未選択</div>
         </div>
-        <label class="pill-btn">選択<input type="file" id="melodyFile" accept="audio/*"></label>
+        <label class="pill-btn">選択<input type="file" id="melodyFile" accept="audio/*" multiple></label>
         <button class="pill-btn" id="melodyListBtn" type="button">一覧を開く</button>
       </div>
       <div class="sound-list" id="melodyList" hidden></div>
@@ -368,7 +368,7 @@
           <div class="sound-title">戸閉放送(OFFで1回再生)</div>
           <div class="sound-filename" id="closeName">未選択</div>
         </div>
-        <label class="pill-btn">選択<input type="file" id="closeFile" accept="audio/*"></label>
+        <label class="pill-btn">選択<input type="file" id="closeFile" accept="audio/*" multiple></label>
         <button class="pill-btn" id="closeListBtn" type="button">一覧を開く</button>
       </div>
       <div class="sound-list" id="closeList" hidden></div>
@@ -433,7 +433,7 @@
 </div>
 
 <script>
-const BUILD_VERSION = "2026-11-05T21:36:49Z";
+const BUILD_VERSION = "2026-11-07T05:16:34Z";
 const onBtn = document.getElementById('onBtn');
 const offBtn = document.getElementById('offBtn');
 const clickOn = document.getElementById('clickOn');
@@ -561,10 +561,12 @@ function bindSavableFileSlot(inputId, nameId, listBtnId, listId, slot) {
   }
 
   input.addEventListener('change', () => {
-    const f = input.files[0];
-    if (!f) return;
-    setAudio(f.name, f);
-    addSoundToDB(slot, f);
+    const files = Array.from(input.files);
+    if (files.length === 0) return;
+    files.forEach(f => addSoundToDB(slot, f));
+    const last = files[files.length - 1];
+    setAudio(last.name, last);
+    if (!listEl.hidden) renderList();
   });
 
   listBtn.addEventListener('click', async () => {
@@ -916,7 +918,11 @@ async function checkForUpdate() {
   }
 }
 
-updateReloadBtn.addEventListener('click', () => location.reload());
+updateReloadBtn.addEventListener('click', () => {
+  // location.reload()だけだと、ブラウザのキャッシュから古いhtmlが返ってきて
+  // バージョンが変わらず、バナーが消えないことがあるため、URLを変えて強制的に取りに行く
+  location.replace(location.pathname + '?_v=' + Date.now());
+});
 
 setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL_MS);
 document.addEventListener('visibilitychange', () => {
