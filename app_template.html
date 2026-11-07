@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>発車ベル操作盤</title>
+<style>
+  :root {
+    --pastel-blue: #cdeaff;
+    --pastel-blue-deep: #7fc4f2;
+    --pastel-mint: #d3f7e6;
+    --pastel-peach: #ffe3d3;
+    --pastel-pink: #ffd6e0;
+    --ink: #4a4a55;
+  }
+  * { box-sizing: border-box; }
+  .update-banner {
+    position: fixed;
+    left: 50%;
+    bottom: 20px;
+    transform: translateX(-50%) translateY(120%);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--ink);
+    color: #fff;
+    padding: 12px 18px;
+    border-radius: 999px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    font-size: 14px;
+    z-index: 1000;
+    transition: transform 0.3s ease;
+  }
+  .update-banner.show { transform: translateX(-50%) translateY(0); }
+  .update-banner button {
+    background: #fff;
+    color: var(--ink);
+    border: none;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  body {
+    font-family: -apple-system, "Hiragino Sans", sans-serif;
+    background: linear-gradient(150deg, #fef8f3, #eef8ff 55%, #f5eefc);
+    margin: 0;
+    padding: 40px 20px 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+    color: var(--ink);
+  }
+  h1.page-title {
+    font-size: 22px;
+    margin: 0;
+    color: var(--ink);
+  }
+  .card {
+    background: white;
+    border-radius: 28px;
+    box-shadow: 0 8px 24px rgba(120,140,180,0.15);
+    padding: 26px 30px;
+    width: 100%;
+    max-width: 880px;
+  }
+
+  /* ---- 設定カード ---- */
+  .station-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 18px;
+  }
+  .station-row input {
+    border: none;
+    background: var(--pastel-blue);
+    border-radius: 14px;
+    padding: 8px 16px;
+    font-size: 15px;
+    font-weight: bold;
+    color: var(--ink);
+    outline: none;
+  }
+  .station-row .sub input {
+    background: #f3f3fa;
+    font-weight: normal;
+    font-size: 13px;
+    padding: 6px 12px;
+  }
+  .sub-label { font-size: 12px; color: #9a9aab; }
+
+  .sound-rows { display: flex; flex-direction: column; gap: 14px; }
+  .sound-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: #f8f9fc;
+    border-radius: 20px;
+    padding: 14px 18px;
+    flex-wrap: wrap;
+  }
+  .sound-icon {
+    width: 44px; height: 44px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    font-weight: bold;
+    color: white;
+    flex-shrink: 0;
+  }
+  .icon-melody { background: var(--pastel-blue-deep); }
+  .icon-close { background: #f2b5c4; }
+  .icon-arrive { background: #9fd8b3; }
+
+  .sound-meta { flex: 1; min-width: 160px; }
+  .sound-title { font-size: 13px; font-weight: bold; color: var(--ink); }
+  .sound-filename { font-size: 12px; color: #8a8aa0; margin-top: 2px; }
+
+  .pill-btn {
+    border: none;
+    border-radius: 999px;
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    background: var(--pastel-blue);
+    color: #1b6faa;
+    transition: filter 0.15s, transform 0.1s;
+  }
+  .pill-btn:hover { filter: brightness(0.96); }
+  .pill-btn:active { transform: scale(0.96); }
+  .pill-btn.play { background: var(--pastel-mint); color: #16825a; }
+  .pill-btn:disabled { background: #ececf2; color: #b5b5c2; cursor: default; }
+  .pill-btn input[type=file] { display: none; }
+
+  .sound-block { display: flex; flex-direction: column; }
+  .sound-list[hidden] { display: none; }
+  .sound-list {
+    margin: 8px 4px 0 60px;
+    background: white;
+    border: 1px solid #e5e6ee;
+    border-radius: 14px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 160px;
+    overflow-y: auto;
+  }
+  .sound-list-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .sound-list-item {
+    flex: 1;
+    text-align: left;
+    border: none;
+    background: transparent;
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .sound-list-item:hover { background: var(--pastel-blue); }
+  .sound-list-delete {
+    border: none;
+    background: transparent;
+    color: #c9a0ab;
+    font-size: 15px;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .sound-list-delete:hover { background: var(--pastel-pink); color: #b5375d; }
+  .sound-list-empty {
+    padding: 8px 10px;
+    font-size: 12px;
+    color: #b5b5c2;
+  }
+
+  .mute-row {
+    margin-top: 18px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #8a8aa0;
+  }
+
+  /* ---- スイッチ本体イラスト ---- */
+  .switch-stage {
+    display: flex;
+    justify-content: center;
+    padding: 10px 0 20px;
+  }
+  .switchbox {
+    width: 146px;
+    background: linear-gradient(160deg, #eef0f3, #d7dae0);
+    border-radius: 26px;
+    padding: 22px 12px 24px;
+    position: relative;
+    box-shadow: 0 10px 20px rgba(60,70,90,0.18);
+  }
+  .switchbox::before {
+    content: "";
+    position: absolute;
+    top: -13px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 32px;
+    height: 16px;
+    background: #222;
+    border-radius: 5px;
+  }
+  .screw-hole {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #c3c7cd;
+    box-shadow:
+      inset 0 2px 3px rgba(30,35,45,0.55),
+      inset 0 -1px 1px rgba(255,255,255,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .screw-hole .screw-head {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #f3f3f3, #9a9ea4 55%, #6b6e73 100%);
+    box-shadow: 0 1px 1px rgba(0,0,0,0.4);
+    position: relative;
+  }
+  .screw-head::before, .screw-head::after {
+    content: "";
+    position: absolute;
+    width: 74%;
+    height: 1.4px;
+    background: #55585d;
+    top: 50%; left: 13%;
+  }
+  .screw-head::before { transform: translateY(-50%) rotate(45deg); }
+  .screw-head::after { transform: translateY(-50%) rotate(-45deg); }
+  .screw-hole.tl { top: 10px; left: 10px; }
+  .screw-hole.tr { top: 10px; right: 10px; }
+  .screw-hole.bl { bottom: 10px; left: 10px; }
+  .screw-hole.br { bottom: 10px; right: 10px; }
+
+  .label-plate {
+    background: #fff;
+    border-radius: 3px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: bold;
+    padding: 6px 0;
+    margin: 10px 10px 14px;
+    color: #222;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  }
+  .btn-well {
+    background: #bcc0c7;
+    border-radius: 18px;
+    padding: 8px 6px;
+    box-shadow:
+      inset 0 3px 6px rgba(40,45,55,0.35),
+      inset 0 -1px 2px rgba(255,255,255,0.4);
+  }
+  .btn-well-inner {
+    background: #a3a8b0;
+    border-radius: 13px;
+    padding: 10px 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    box-shadow: inset 0 4px 8px rgba(30,34,42,0.4);
+  }
+  .sw-btn {
+    border: none;
+    border-radius: 8px;
+    width: 74px;
+    height: 60px;
+    font-size: 15px;
+    font-weight: 500;
+    color: white;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: transform 0.08s, box-shadow 0.08s;
+  }
+  .sw-btn.on {
+    background: #1a1a1a;
+    box-shadow: 0 3px 5px rgba(0,0,0,0.35);
+  }
+  .sw-btn.off {
+    background: #dd2b23;
+    box-shadow: 0 11px 18px rgba(0,0,0,0.55);
+  }
+  .sw-btn.active { transform: translateY(2px); }
+  .sw-btn.off.active { box-shadow: 0 4px 8px rgba(0,0,0,0.5); }
+  .sw-btn.on.active { box-shadow: inset 0 2px 4px rgba(0,0,0,0.6); }
+
+  /* ---- 実機連携 ---- */
+  .hw-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: #ececf2;
+    color: #8a8aa0;
+  }
+  .status-pill.ok { background: var(--pastel-mint); color: #16825a; }
+  .status-pill.err { background: var(--pastel-pink); color: #b5375d; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  #hwLog {
+    margin-top: 12px;
+    background: #2a2a35;
+    color: #8ef0a0;
+    font-family: monospace;
+    font-size: 11px;
+    padding: 10px 14px;
+    border-radius: 14px;
+    height: 70px;
+    overflow-y: auto;
+  }
+  .hint { font-size: 12px; color: #a3a3b5; margin-top: 8px; }
+  h2 {
+    font-size: 14px;
+    margin: 0 0 16px;
+    color: #8a8aa0;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+
+<h1 class="page-title">発車ベル操作盤</h1>
+
+<div class="card">
+  <div class="sound-rows">
+    <div class="sound-block">
+      <div class="sound-row">
+        <div class="sound-icon icon-melody">♪</div>
+        <div class="sound-meta">
+          <div class="sound-title">メロディー(ON中ループ再生)</div>
+          <div class="sound-filename" id="melodyName">未選択</div>
+        </div>
+        <label class="pill-btn">選択<input type="file" id="melodyFile" accept="audio/*" multiple></label>
+        <button class="pill-btn" id="melodyListBtn" type="button">一覧を開く</button>
+      </div>
+      <div class="sound-list" id="melodyList" hidden></div>
+    </div>
+
+    <div class="sound-block">
+      <div class="sound-row">
+        <div class="sound-icon icon-close">閉</div>
+        <div class="sound-meta">
+          <div class="sound-title">戸閉放送(OFFで1回再生)</div>
+          <div class="sound-filename" id="closeName">未選択</div>
+        </div>
+        <label class="pill-btn">選択<input type="file" id="closeFile" accept="audio/*" multiple></label>
+        <button class="pill-btn" id="closeListBtn" type="button">一覧を開く</button>
+      </div>
+      <div class="sound-list" id="closeList" hidden></div>
+    </div>
+
+    <div class="sound-block">
+      <div class="sound-row">
+        <div class="sound-icon icon-arrive">着</div>
+        <div class="sound-meta">
+          <div class="sound-title">到着放送(手動再生)</div>
+          <div class="sound-filename" id="arriveName">未選択</div>
+        </div>
+        <label class="pill-btn">選択<input type="file" id="arriveFile" accept="audio/*"></label>
+        <button class="pill-btn play" id="arrivePlayBtn" disabled>再生する</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mute-row">
+    <input type="checkbox" id="muteClick">
+    <label for="muteClick">ボタンのクリック音を消す</label>
+  </div>
+  <div class="mute-row">
+    <input type="checkbox" id="tachikawaMode">
+    <label for="tachikawaMode">立川式(OFFにしてもメロディーは鳴り終わるまで止めず、放送は重なっても構わず流す)</label>
+  </div>
+</div>
+
+<div class="switch-stage">
+  <div class="switchbox">
+    <div class="screw-hole tl"><div class="screw-head"></div></div>
+    <div class="screw-hole tr"><div class="screw-head"></div></div>
+    <div class="label-plate">発車ベル</div>
+    <div class="btn-well">
+      <div class="btn-well-inner">
+        <button class="sw-btn on" id="onBtn">ON</button>
+        <button class="sw-btn off" id="offBtn">OFF</button>
+      </div>
+    </div>
+    <div class="screw-hole bl"><div class="screw-head"></div></div>
+    <div class="screw-hole br"><div class="screw-head"></div></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>実機連携(実験的機能)</h2>
+  <div class="hw-row">
+    <button class="pill-btn" id="connectHwBtn">実機に接続する</button>
+    <button class="pill-btn" id="disconnectHwBtn" disabled>切断する</button>
+    <span class="status-pill" id="hwStatus"><span class="dot"></span>未接続</span>
+  </div>
+  <div class="hint">CH340チップのUSBシリアル変換ケーブル経由で、実際のスイッチのON/OFFを検知します(ドライバ不要・WebUSB使用)。ChromeまたはEdgeが必要です。</div>
+  <div id="hwLog"></div>
+</div>
+
+<audio id="clickOn" src="__BUTTON1_DATAURI__"></audio>
+<audio id="clickOff" src="__BUTTON2_DATAURI__"></audio>
+
+<div class="update-banner" id="updateBanner">
+  <span>新しいバージョンがあります</span>
+  <button id="updateReloadBtn">再読み込み</button>
+</div>
+
+<script>
+const BUILD_VERSION = "__BUILD_VERSION__";
+const onBtn = document.getElementById('onBtn');
+const offBtn = document.getElementById('offBtn');
+const clickOn = document.getElementById('clickOn');
+const clickOff = document.getElementById('clickOff');
+const muteClick = document.getElementById('muteClick');
+const tachikawaMode = document.getElementById('tachikawaMode');
+
+/* ===== 音声ライブラリ(IndexedDB、複数保存・一覧選択) ===== */
+const SOUND_DB_NAME = 'bellAppSounds';
+const SOUND_STORE = 'sounds';
+
+function openSoundDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(SOUND_DB_NAME, 2);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (db.objectStoreNames.contains(SOUND_STORE)) {
+        db.deleteObjectStore(SOUND_STORE);
+      }
+      const store = db.createObjectStore(SOUND_STORE, { keyPath: 'id', autoIncrement: true });
+      store.createIndex('slot', 'slot', { unique: false });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function addSoundToDB(slot, file) {
+  try {
+    const db = await openSoundDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(SOUND_STORE, 'readwrite');
+      tx.objectStore(SOUND_STORE).add({ slot, name: file.name, blob: file });
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.warn('音声の保存に失敗しました:', e);
+  }
+}
+
+async function listSoundsForSlot(slot) {
+  try {
+    const db = await openSoundDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(SOUND_STORE, 'readonly');
+      const req = tx.objectStore(SOUND_STORE).index('slot').getAll(slot);
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) {
+    console.warn('一覧の取得に失敗しました:', e);
+    return [];
+  }
+}
+
+async function deleteSoundFromDB(id) {
+  try {
+    const db = await openSoundDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(SOUND_STORE, 'readwrite');
+      tx.objectStore(SOUND_STORE).delete(id);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.warn('音声の削除に失敗しました:', e);
+  }
+}
+
+function bindSavableFileSlot(inputId, nameId, listBtnId, listId, slot) {
+  const input = document.getElementById(inputId);
+  const nameEl = document.getElementById(nameId);
+  const listBtn = document.getElementById(listBtnId);
+  const listEl = document.getElementById(listId);
+  let audio = null;
+
+  function setAudio(name, blob) {
+    nameEl.textContent = name;
+    audio = new Audio(URL.createObjectURL(blob));
+    if (inputId === 'melodyFile') audio.loop = true;
+  }
+
+  function closeList() {
+    listEl.hidden = true;
+    listEl.innerHTML = '';
+    listBtn.textContent = '一覧を開く';
+  }
+
+  async function renderList() {
+    const items = await listSoundsForSlot(slot);
+    listEl.innerHTML = '';
+    if (items.length === 0) {
+      listEl.innerHTML = '<div class="sound-list-empty">保存された音声はまだありません</div>';
+      return;
+    }
+    items.slice().reverse().forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'sound-list-row';
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sound-list-item';
+      btn.textContent = item.name;
+      btn.addEventListener('click', () => {
+        setAudio(item.name, item.blob);
+        closeList();
+      });
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'sound-list-delete';
+      delBtn.textContent = '×';
+      delBtn.title = '削除';
+      delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await deleteSoundFromDB(item.id);
+        renderList();
+      });
+
+      row.appendChild(btn);
+      row.appendChild(delBtn);
+      listEl.appendChild(row);
+    });
+  }
+
+  input.addEventListener('change', () => {
+    const files = Array.from(input.files);
+    if (files.length === 0) return;
+    files.forEach(f => addSoundToDB(slot, f));
+    const last = files[files.length - 1];
+    setAudio(last.name, last);
+    if (!listEl.hidden) renderList();
+  });
+
+  listBtn.addEventListener('click', async () => {
+    if (!listEl.hidden) {
+      closeList();
+      return;
+    }
+    listEl.hidden = false;
+    listBtn.textContent = '一覧を閉じる';
+    renderList();
+  });
+
+  return {
+    get: () => audio
+  };
+}
+
+const melodySlot = bindSavableFileSlot('melodyFile', 'melodyName', 'melodyListBtn', 'melodyList', 'melody');
+const closeSlot = bindSavableFileSlot('closeFile', 'closeName', 'closeListBtn', 'closeList', 'close');
+
+/* 到着放送は保存しない(選んだ時だけ使う) */
+const arriveInput = document.getElementById('arriveFile');
+const arriveNameEl = document.getElementById('arriveName');
+let arriveAudio = null;
+arriveInput.addEventListener('change', () => {
+  const f = arriveInput.files[0];
+  if (!f) return;
+  arriveNameEl.textContent = f.name;
+  arriveAudio = new Audio(URL.createObjectURL(f));
+  document.getElementById('arrivePlayBtn').disabled = false;
+});
+const arriveSlot = { get: () => arriveAudio };
+
+document.getElementById('arrivePlayBtn').addEventListener('click', () => {
+  const a = arriveSlot.get();
+  if (!a) return;
+  a.currentTime = 0;
+  a.play().catch(() => {});
+});
+
+let currentState = null; // true=ON, false=OFF, null=未確定
+
+/* ===== 立川式: OFFにしてもメロディーを即座に止めず、今鳴っている分は最後まで鳴らし切る。
+   メロディー自体は重ねない(現実の単一音源機材と同じく1つだけ)。連打でON/OFF/ONと来ても、
+   まだ鳴り終わっていない分があればそれをそのまま鳴らし続け(ループを再度有効化するだけ)、
+   新しいインスタンスは作らない。これにより連打時にメロディーが多重に重なるバグを防ぐ。
+   一方、戸閉放送はメロディーとは別チャンネル扱いなので、メロディーの尻尾と重ねて流してよいが、
+   戸閉放送同士は重ねない(新しい方を優先し、古い方は止める)。
+   また、戸閉放送が鳴っている間はメロディーの音量を少しだけ下げる(ダッキング)。 */
+let tachikawaMelodyInstance = null; // メロディーは重ねないので、鳴っている分は常にこれ1つだけ
+let tachikawaCloseInstance = null;  // 戸閉放送は重ねないので、最新の1つだけを保持する
+const TACHIKAWA_DUCK_VOLUME = 0.55; // 戸閉放送が鳴っている間、メロディーをこの音量まで少しだけ下げる
+let tachikawaDucking = false;
+
+function setMelodyDucking(on) {
+  tachikawaDucking = on;
+  if (tachikawaMelodyInstance) {
+    tachikawaMelodyInstance.volume = on ? TACHIKAWA_DUCK_VOLUME : 1;
+  }
+}
+
+function ensureMelodyPlaying(srcAudio) {
+  if (!srcAudio || !srcAudio.src) return;
+  const cur = tachikawaMelodyInstance;
+  if (cur && !cur.ended && !cur.paused) {
+    // まだ鳴り終わっていない分があるので、それをそのままループ再開させるだけ(新規インスタンスは作らない)
+    cur.loop = true;
+    return;
+  }
+  const inst = new Audio(srcAudio.src);
+  inst.loop = true;
+  inst.volume = tachikawaDucking ? TACHIKAWA_DUCK_VOLUME : 1;
+  inst.play().catch(() => {});
+  inst.addEventListener('ended', () => {
+    if (tachikawaMelodyInstance === inst) tachikawaMelodyInstance = null;
+  });
+  tachikawaMelodyInstance = inst;
+}
+
+function stopMelodyLoop() {
+  // 即座には止めず、今鳴っている分だけループを解除して自然に鳴らし切る
+  if (tachikawaMelodyInstance) {
+    tachikawaMelodyInstance.loop = false;
+  }
+}
+
+function playCloseAnnouncement(srcAudio) {
+  if (!srcAudio || !srcAudio.src) return;
+  if (tachikawaCloseInstance) {
+    // 戸閉放送同士は重ねない: 鳴っている分があれば止めて、新しい方を優先する
+    tachikawaCloseInstance.pause();
+  }
+  const inst = new Audio(srcAudio.src);
+  tachikawaCloseInstance = inst;
+  setMelodyDucking(true);
+  inst.play().catch(() => {});
+  inst.addEventListener('ended', () => {
+    if (tachikawaCloseInstance === inst) {
+      tachikawaCloseInstance = null;
+      setMelodyDucking(false);
+    }
+  });
+}
+
+function setState(isOn) {
+  if (currentState === isOn) return;
+  currentState = isOn;
+
+  onBtn.classList.toggle('active', isOn);
+  offBtn.classList.toggle('active', !isOn);
+
+  if (!muteClick.checked) {
+    const clickSound = isOn ? clickOn : clickOff;
+    clickSound.currentTime = 0;
+    clickSound.play().catch(() => {});
+  }
+
+  const melody = melodySlot.get();
+  const tachikawa = tachikawaMode.checked;
+
+  if (isOn) {
+    if (melody) {
+      if (tachikawa) {
+        ensureMelodyPlaying(melody);
+      } else {
+        melody.currentTime = 0;
+        melody.play().catch(() => {});
+      }
+    }
+  } else {
+    if (tachikawa) {
+      stopMelodyLoop();
+    } else if (melody) {
+      melody.pause();
+    }
+    const close = closeSlot.get();
+    if (close) {
+      if (tachikawa) {
+        playCloseAnnouncement(close); // メロディーを止めていないので自然に重なって流れる(戸閉放送同士は重ねない)
+      } else {
+        close.currentTime = 0;
+        close.play().catch(() => {});
+      }
+    }
+  }
+}
+
+onBtn.addEventListener('click', () => setState(true));
+offBtn.addEventListener('click', () => setState(false));
+
+window.addEventListener('keydown', (e) => {
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    setState(true);
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    setState(false);
+  }
+});
+
+/* ===== 実機連携 (WebUSB / CH340直接制御) ===== */
+const connectHwBtn = document.getElementById('connectHwBtn');
+const disconnectHwBtn = document.getElementById('disconnectHwBtn');
+const hwStatus = document.getElementById('hwStatus');
+const hwLog = document.getElementById('hwLog');
+
+let hwDevice = null;
+let hwBackend = null; // 'usb' (WebUSB) または 'serial' (Web Serial)
+let hwPolling = false;
+
+/* Macには、CH340の標準ドライバが入っていないため、WebUSBで直接デバイスを叩く必要がある。
+   一方Windowsでは、CH340の標準ドライバがデバイスを占有してしまい、WebUSBでは
+   device.open()が「Access denied」で失敗する。Windowsでは、代わりにOSのドライバ経由で
+   繋がるWeb Serial APIを使うと、この占有を避けられる。そのため、OSを判定して、
+   使う方式を切り替える。 */
+function detectPreferredHwBackend() {
+  const platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
+  return /win/i.test(platform) ? 'serial' : 'usb';
+}
+
+function logHw(msg) {
+  const t = new Date().toLocaleTimeString();
+  hwLog.innerHTML = `[${t}] ${msg}<br>` + hwLog.innerHTML;
+}
+
+function setHwStatus(text, cls) {
+  hwStatus.className = 'status-pill' + (cls ? ' ' + cls : '');
+  hwStatus.innerHTML = `<span class="dot"></span>${text}`;
+}
+
+function hwUiConnected() {
+  setHwStatus('接続済み', 'ok');
+  connectHwBtn.textContent = '接続中';
+  connectHwBtn.disabled = true;
+  disconnectHwBtn.disabled = false;
+  muteClick.checked = true; // 実機のスイッチ自体が音を出すので、擬似クリック音は自動で消す
+}
+
+function hwUiDisconnected(text) {
+  setHwStatus(text || '未接続');
+  connectHwBtn.textContent = '実機に接続する';
+  connectHwBtn.disabled = false;
+  disconnectHwBtn.disabled = true;
+}
+
+async function connectViaUsb() {
+  const device = await navigator.usb.requestDevice({
+    filters: [{ vendorId: 0x1a86, productId: 0x7523 }]
+  });
+  await device.open();
+  if (device.configuration === null) {
+    await device.selectConfiguration(1);
+  }
+  await device.claimInterface(0);
+
+  const DTR = 0x20, RTS = 0x40;
+  const control = DTR | RTS;
+  const wValue = (~control) & 0xFF;
+  await device.controlTransferOut({
+    requestType: 'vendor', recipient: 'device', request: 0xA4, value: wValue, index: 0
+  });
+
+  hwBackend = 'usb';
+  hwDevice = device;
+  logHw('WebUSBで接続しました。DTR/RTSをONにしました。');
+}
+
+async function connectViaSerial() {
+  const port = await navigator.serial.requestPort({
+    filters: [{ usbVendorId: 0x1a86, usbProductId: 0x7523 }]
+  });
+  await port.open({ baudRate: 9600 });
+  await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+
+  hwBackend = 'serial';
+  hwDevice = port;
+  logHw('Web Serialで接続しました。DTR/RTSをONにしました。');
+}
+
+async function connectHardware() {
+  const hasUsb = 'usb' in navigator;
+  const hasSerial = 'serial' in navigator;
+  if (!hasUsb && !hasSerial) {
+    logHw('このブラウザはWebUSB/Web Serialに対応していません。Chrome/Edgeを使ってください。');
+    return;
+  }
+
+  const preferred = detectPreferredHwBackend();
+  const primary = (preferred === 'usb' && hasUsb) ? 'usb'
+                : (preferred === 'serial' && hasSerial) ? 'serial'
+                : (hasUsb ? 'usb' : 'serial');
+
+  try {
+    if (primary === 'usb') { await connectViaUsb(); } else { await connectViaSerial(); }
+  } catch (e) {
+    if (e.name === 'NotFoundError') {
+      // デバイス選択画面で、ユーザーが何も選ばなかった場合は、そのまま終了する(もう一方は試さない)
+      logHw('デバイスが選択されませんでした。');
+      setHwStatus('未接続');
+      return;
+    }
+    logHw(`${primary === 'usb' ? 'WebUSB' : 'Web Serial'}での接続に失敗しました: ` + e.message);
+
+    const fallback = primary === 'usb' ? 'serial' : 'usb';
+    const fallbackAvailable = fallback === 'usb' ? hasUsb : hasSerial;
+    if (!fallbackAvailable) {
+      setHwStatus('接続失敗', 'err');
+      return;
+    }
+    logHw(`${fallback === 'usb' ? 'WebUSB' : 'Web Serial'}方式で、もう一度試します。`);
+    try {
+      if (fallback === 'usb') { await connectViaUsb(); } else { await connectViaSerial(); }
+    } catch (e2) {
+      logHw('接続失敗: ' + e2.message);
+      setHwStatus('接続失敗', 'err');
+      return;
+    }
+  }
+
+  hwPolling = true;
+  hwUiConnected();
+  pollHardware();
+}
+
+async function disconnectHardware() {
+  hwPolling = false;
+  if (hwDevice) {
+    try {
+      await hwDevice.close();
+    } catch (e) {
+      logHw('切断時エラー: ' + e.message);
+    }
+  }
+  hwDevice = null;
+  hwBackend = null;
+  logHw('切断しました。');
+  hwUiDisconnected('未接続');
+}
+
+async function pollHardware() {
+  while (hwPolling) {
+    try {
+      let isOn;
+      if (hwBackend === 'usb') {
+        const result = await hwDevice.controlTransferIn({
+          requestType: 'vendor', recipient: 'device', request: 0x95, value: 0x0706, index: 0
+        }, 2);
+        const byte0 = result.data.getUint8(0);
+        isOn = (byte0 & 0x02) === 0;
+      } else {
+        const signals = await hwDevice.getSignals();
+        isOn = signals.dataSetReady;
+      }
+      setState(isOn);
+      await new Promise(r => setTimeout(r, 100));
+    } catch (e) {
+      if (!hwPolling) break; // 手動切断による正常終了
+      logHw('読み取りエラー: ' + e.message);
+      hwPolling = false;
+      hwDevice = null;
+      hwUiDisconnected('切断されました');
+      break;
+    }
+  }
+}
+
+disconnectHwBtn.addEventListener('click', disconnectHardware);
+
+connectHwBtn.addEventListener('click', connectHardware);
+
+/* ===== 更新確認: version.json を定期的に見に行き、
+   このページが読み込んだ時点のバージョンと違っていたら、再読み込みを促すバナーを出す。 */
+const updateBanner = document.getElementById('updateBanner');
+const updateReloadBtn = document.getElementById('updateReloadBtn');
+const UPDATE_CHECK_INTERVAL_MS = 2 * 60 * 1000; // 2分ごと
+
+async function checkForUpdate() {
+  try {
+    const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.version && data.version !== BUILD_VERSION) {
+      updateBanner.classList.add('show');
+    }
+  } catch (e) {
+    // 通信エラー時は、何もしない(次回のチェックに任せる)
+  }
+}
+
+updateReloadBtn.addEventListener('click', () => location.reload());
+
+setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL_MS);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkForUpdate();
+});
+checkForUpdate();
+</script>
+
+</body>
+</html>
